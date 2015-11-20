@@ -3,7 +3,7 @@
 #include <map>
 #include <utility>
 #include <queue>
-#include <assert>
+#include <cassert>
 
 using namespace std;
 
@@ -91,24 +91,26 @@ struct PLAYER_NAME : public Player {
 	   * La implementación interna va a usar maps o unordered_maps (ya veremos). 
 	   */
 	   
-	   int enqueue(map <Pos, pair<Pos, int>, pos_comp>& m, const Pos& p, const Dir& d, queue<Pos>& q, const int& l, const CType& obj) {
+	   bool enqueue(map <Pos, pair<Pos, int>, pos_comp>& m, const Pos& p, const Dir& d, queue<Pos>& q, const int& l, const CType& obj) {
 		   assert(dir_ok(d)); // DEBUG
 		   map<Pos, pair<Pos, int>, pos_comp>::iterator it;
 		   if(within_window(p+d, round())) {
 				   it = m.find(p+d);
 				   if (it == m.end()) { // Posición no visitada con aterioridad.
-						if (cell(p+d).type == EMPTY or cell(p+d) == MISSILE)  {
+						if (cell(p+d).type == EMPTY or cell(p+d).type == MISSILE)  {
 							m[p+d] = make_pair(p, l);
 							q.push(p+d);
-							return 1;
+							return false;
 						} else if (cell(p+d).type == obj) {
 							// Encontrado
 							m[p+d] = make_pair(p, l);
 							stack_movements(m, p+d);
-							return 2;
+							objective = p+d;
+							active_objective = true;
+							return true;
 						}
 					}
-					return 0;
+					return false;
 				}
 	   }
 	   
@@ -125,28 +127,14 @@ struct PLAYER_NAME : public Player {
 		   while (not q.empty()) {
 			   Pos x = q.front(); q.pop();
 			   int xlimit = positions[x].second;
+			   assert (xlimit <= limit);
 			   // Parte complicada, definir con que está conectado cada celda.
 			   if (xlimit < limit) {
-				   int res = enqueue(positions, x, SLOW_UP, q, xlimit+1, obj);
-				   if (res == 1) {
-					   
-				   } else if (res == 2) {
-					   
-				   }
-				} if (within_window(x+DEFAULT, round())) {
-					it = positions.find(x+DEFAULT);
-					if (it == positions.end()) {
-						if (cell(x+DEFAULT).type == EMPTY)  {
-							positions[x+DEFAULT] = make_pair(x, xlimit);
-							q.push(x+DEFAULT);
-						} else if (cell(x+DEFAULT).type == obj) {
-							positions[x+DEFAULT] = make_pair(x, 0);
-							stack_movements(positions, x+DEFAULT);
-							return;
-						}
-					}
-				} if (xlimit < limit and within_window(x+DOWN, round())) {
+				   if(enqueue(positions, p, SLOW_UP, q, xlimit+1, obj)) return;
+				   if(enqueue(positions, p, SLOW_DOWN, q, xlimit+1, obj)) return;
 				}
+				if (cell(p+SLOW_UP).type == EMPTY or cell(p+SLOW_UP).type == MISSILE) if(enqueue(positions, p, UP, q, xlimit, obj)) return;
+				if (cell(p+SLOW_DOWN).type == EMPTY or cell(p+SLOW_DOWN).type == MISSILE) if(enqueue(positions, p, DOWN, q, xlimit, obj)) return;
 		   }
 	   }
 
