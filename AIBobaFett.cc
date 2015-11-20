@@ -115,9 +115,14 @@ struct PLAYER_NAME : public Player {
 				}
 	   }
 	   
-	   void stack_movements(const map<Pos, pair<Pos, int>, pos_comp>& m, const Pos& p) {
+	   void stack_movements(map<Pos, pair<Pos, int>, pos_comp>& m, Pos p) {
 		   pendent_moves = stack<Dir>();
-		   
+		   map<Pos, pair<Pos, int>, pos_comp>::iterator it;
+		   while(m[p].first != p) {
+			   assert(dir_ok(p - m[p].first));
+			   pendent_moves.push(p - m[p].first);
+			   p = m[p].first;
+		   }
 	   }
 	   
 	   void objective_search(const Pos& p, const CType& obj, const int& limit) {
@@ -125,6 +130,7 @@ struct PLAYER_NAME : public Player {
 		   // Definimos estructuras auxiliares.
 		   map<Pos, pair<Pos, int>, pos_comp> positions;
 		   queue<Pos> q;
+		   positions[p] = make_pair(p, 0);
 		   q.push(p);
 		   while (not q.empty()) {
 			   Pos x = q.front(); q.pop();
