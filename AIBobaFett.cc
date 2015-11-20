@@ -3,6 +3,7 @@
 #include <map>
 #include <utility>
 #include <queue>
+#include <assert>
 
 using namespace std;
 
@@ -90,6 +91,27 @@ struct PLAYER_NAME : public Player {
 	   * La implementación interna va a usar maps o unordered_maps (ya veremos). 
 	   */
 	   
+	   int enqueue(map <Pos, pair<Pos, int>, pos_comp>& m, const Pos& p, const Dir& d, queue<Pos>& q, const int& l, const CType& obj) {
+		   assert(dir_ok(d)); // DEBUG
+		   map<Pos, pair<Pos, int>, pos_comp>::iterator it;
+		   if(within_window(p+d, round())) {
+				   it = m.find(p+d);
+				   if (it == m.end()) { // Posición no visitada con aterioridad.
+						if (cell(p+d).type == EMPTY or cell(p+d) == MISSILE)  {
+							m[p+d] = make_pair(p, l);
+							q.push(p+d);
+							return 1;
+						} else if (cell(p+d).type == obj) {
+							// Encontrado
+							m[p+d] = make_pair(p, l);
+							stack_movements(m, p+d);
+							return 2;
+						}
+					}
+					return 0;
+				}
+	   }
+	   
 	   void stack_movements(const map<Pos, pair<Pos, int>, pos_comp>& m, const Pos& p) {
 		   
 	   }
@@ -104,32 +126,13 @@ struct PLAYER_NAME : public Player {
 			   Pos x = q.front(); q.pop();
 			   int xlimit = positions[x].second;
 			   // Parte complicada, definir con que está conectado cada celda.
-			   map<Pos, pair<Pos, int>, pos_comp>::iterator it;
-			   if (xlimit < limit and within_window(x+SLOW_UP, round())) {
-				   it = positions.find(x+SLOW_UP);
-				   if (it == positions.end()) {
-						if (cell(x+SLOW_UP).type == EMPTY)  {
-							positions[x+SLOW_UP] = make_pair(x, xlimit+1);
-							q.push(x+SLOW_UP);
-							if (within_window(x+UP, round())) {
-								it = positions.find(x+UP);
-								if (it == positions.end()) {
-									if (cell(x+UP).type == EMPTY) {
-										positions[x+UP] = make_pair(x, xlimit+1);
-										q.push(x+UP);
-									} else if (cell(x+UP).type == obj) {
-										positions[x+UP] = make_pair(x, 0);
-										stack_movements(positions, x+UP);
-										return;
-									}
-								}
-							}
-						} else if (cell(x+SLOW_UP).type == obj) {
-							positions[x+SLOW_UP] = make_pair(x, 0);
-							stack_movements(positions, x+SLOW_UP);
-							return;
-						}
-					}
+			   if (xlimit < limit) {
+				   int res = enqueue(positions, x, SLOW_UP, q, xlimit+1, obj);
+				   if (res == 1) {
+					   
+				   } else if (res == 2) {
+					   
+				   }
 				} if (within_window(x+DEFAULT, round())) {
 					it = positions.find(x+DEFAULT);
 					if (it == positions.end()) {
