@@ -45,6 +45,7 @@ struct PLAYER_NAME : public Player {
 	stack<Dir> pendent_moves;
 	
 	bool updown(Dir d)   { return d == SLOW_UP   or d == UP   or d == FAST_UP or d == SLOW_DOWN or d == DOWN or d == FAST_DOWN;   }
+	bool suitable(const Pos& c) { return within_window(c, round()) and (cell(c).type == EMPTY or cell(c).type == MISSILE); }
 	
 	// Comprobar si hay alguien delante para matar
 		  
@@ -115,6 +116,7 @@ struct PLAYER_NAME : public Player {
 	   }
 	   
 	   void stack_movements(const map<Pos, pair<Pos, int>, pos_comp>& m, const Pos& p) {
+		   pendent_moves = stack<Dir>();
 		   
 	   }
 	   
@@ -128,13 +130,17 @@ struct PLAYER_NAME : public Player {
 			   Pos x = q.front(); q.pop();
 			   int xlimit = positions[x].second;
 			   assert (xlimit <= limit);
+			   if (enqueue(positions, p, DEFAULT, q, xlimit, obj)) return;
+			   if (enqueue(positions, p, FAST, q, xlimit, obj)) return;
 			   // Parte complicada, definir con que está conectado cada celda.
 			   if (xlimit < limit) {
 				   if(enqueue(positions, p, SLOW_UP, q, xlimit+1, obj)) return;
 				   if(enqueue(positions, p, SLOW_DOWN, q, xlimit+1, obj)) return;
 				}
-				if (cell(p+SLOW_UP).type == EMPTY or cell(p+SLOW_UP).type == MISSILE) if(enqueue(positions, p, UP, q, xlimit, obj)) return;
-				if (cell(p+SLOW_DOWN).type == EMPTY or cell(p+SLOW_DOWN).type == MISSILE) if(enqueue(positions, p, DOWN, q, xlimit, obj)) return;
+				if (suitable(p+SLOW_UP) and enqueue(positions, p, UP, q, xlimit, obj)) return;
+				if (suitable(p+SLOW_DOWN) and enqueue(positions, p, DOWN, q, xlimit, obj)) return;
+				if (suitable(p+DEFAULT) and suitable(p+UP) and enqueue(positions, p, FAST_UP, q, xlimit-1, obj)) return;
+				if (suitable(p+DEFAULT) and suitable(p+DOWN) and enqueue(positions, p, FAST_DOWN, q, xlimit-1, obj)) return;
 		   }
 	   }
 
