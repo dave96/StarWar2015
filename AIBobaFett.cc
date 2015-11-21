@@ -3,6 +3,7 @@
 #include <map>
 #include <utility>
 #include <queue>
+#include <vector>
 #include <cassert>
 
 using namespace std;
@@ -40,9 +41,8 @@ struct PLAYER_NAME : public Player {
      * Attributes for your player can be defined here.
      */
      
-    bool active_objective = false;
-	Pos objective;
-	stack<Dir> pendent_moves;
+    vector<bool> active_objective;
+    vector<pair<Pos, stack<Dir>> objective;
 	
 	bool updown(Dir d)   { return d == SLOW_UP   or d == UP   or d == FAST_UP or d == SLOW_DOWN or d == DOWN or d == FAST_DOWN;   }
 	bool suitable(const Pos& c) { return within_window(c, round()) and (cell(c).type == EMPTY or cell(c).type == MISSILE); }
@@ -76,6 +76,16 @@ struct PLAYER_NAME : public Player {
 		return p;
 	  }
 	  
+	  int get_limit(Pos p) {
+		  int limit = 0;
+		  p -= BACK;
+		  while (within_window(p)) {
+			  limit++;
+			  p -= BACK;
+		  }
+		  return limit;
+	  }
+	  
 	  
 	  /**
 	   * Esto es una implementación del algoritmo BFS, aplicado a las posiciones.
@@ -92,7 +102,7 @@ struct PLAYER_NAME : public Player {
 	   * La implementación interna va a usar maps o unordered_maps (ya veremos). 
 	   */
 	   
-	   bool enqueue(map <Pos, pair<Pos, int>, pos_comp>& m, const Pos& p, const Dir& d, queue<Pos>& q, const int& l, const CType& obj) {
+	   bool enqueue(map <Pos, pair<Pos, int>, pos_comp>& m, const Pos& p, const Dir& d, queue<Pos>& q, const int& l, const CType& obj, const int& s_indx) {
 		   assert(dir_ok(d)); // DEBUG
 		   map<Pos, pair<Pos, int>, pos_comp>::iterator it;
 		   if(within_window(p+d, round())) {
@@ -105,9 +115,9 @@ struct PLAYER_NAME : public Player {
 						} else if (cell(p+d).type == obj) {
 							// Encontrado
 							m[p+d] = make_pair(p, l);
-							stack_movements(m, p+d);
+							stack_movements(m, p+d, s_indx);
 							objective = p+d;
-							active_objective = true;
+							active_objective[s_indx] = true;
 							return true;
 						}
 					}
@@ -115,18 +125,20 @@ struct PLAYER_NAME : public Player {
 				}
 	   }
 	   
-	   void stack_movements(map<Pos, pair<Pos, int>, pos_comp>& m, Pos p) {
-		   pendent_moves = stack<Dir>();
+	   void stack_movements(map<Pos, pair<Pos, int>, pos_comp>& m, Pos p, const int& s_indx) {
+		   pendent_moves[s_indx].second = stack<Dir>();
+		   pendent_moves[s_indx].first = p;
 		   map<Pos, pair<Pos, int>, pos_comp>::iterator it;
 		   while(m[p].first != p) {
 			   assert(dir_ok(p - m[p].first));
-			   pendent_moves.push(p - m[p].first);
+			   pendent_moves[s_indx].second.push(p - m[p].first);
 			   p = m[p].first;
 		   }
 	   }
 	   
 	   void objective_search(const Pos& p, const CType& obj, const int& limit) {
-		   active_objective = false;
+		   int s_indx = cell(p).sid - begin(me());
+		   active_objective[s_indx] = false;
 		   // Definimos estructuras auxiliares.
 		   map<Pos, pair<Pos, int>, pos_comp> positions;
 		   queue<Pos> q;
@@ -136,17 +148,17 @@ struct PLAYER_NAME : public Player {
 			   Pos x = q.front(); q.pop();
 			   int xlimit = positions[x].second;
 			   assert (xlimit <= limit);
-			   if (enqueue(positions, p, DEFAULT, q, xlimit, obj)) return;
-			   if (enqueue(positions, p, FAST, q, xlimit, obj)) return;
+			   if (enqueue(positions, p, DEFAULT, q, xlimit, obj, s_indx)) return;
+			   if (enqueue(positions, p, FAST, q, xlimit, obj, s_indx)) return;
 			   // Parte complicada, definir con que está conectado cada celda.
 			   if (xlimit < limit) {
-				   if(enqueue(positions, p, SLOW_UP, q, xlimit+1, obj)) return;
-				   if(enqueue(positions, p, SLOW_DOWN, q, xlimit+1, obj)) return;
+				   if(enqueue(positions, p, SLOW_UP, q, xlimit+1, obj, s_indx)) return;
+				   if(enqueue(positions, p, SLOW_DOWN, q, xlimit+1, obj, s_indx)) return;
 				}
-				if (suitable(p+SLOW_UP) and enqueue(positions, p, UP, q, xlimit, obj)) return;
-				if (suitable(p+SLOW_DOWN) and enqueue(positions, p, DOWN, q, xlimit, obj)) return;
-				if (suitable(p+DEFAULT) and suitable(p+UP) and enqueue(positions, p, FAST_UP, q, xlimit-1, obj)) return;
-				if (suitable(p+DEFAULT) and suitable(p+DOWN) and enqueue(positions, p, FAST_DOWN, q, xlimit-1, obj)) return;
+				if (suitable(p+SLOW_UP) and enqueue(positions, p, UP, q, xlimit, obj, s_indx)) return;
+				if (suitable(p+SLOW_DOWN) and enqueue(positions, p, DOWN, q, xlimit, obj, s_indx)) return;
+				if (suitable(p+DEFAULT) and suitable(p+UP) and enqueue(positions, p, FAST_UP, q, xlimit-1, obj, s_indx)) return;
+				if (suitable(p+DEFAULT) and suitable(p+DOWN) and enqueue(positions, p, FAST_DOWN, q, xlimit-1, obj, s_indx)) return;
 		   }
 	   }
 
@@ -163,14 +175,14 @@ struct PLAYER_NAME : public Player {
 
 		if (round() == 0) {
 		  // Inicializar tipos de datos.
-		  
+		  active_objective = vector<bool> (number_starships_per_player(), false);
 		}
 
 		// Por cada nave.
 		for (Starship_Id sid = begin(me()); sid != end(me()); ++sid) {
 
 		  Starship s = starship(sid);
-
+		  int s_indx = sid - begin(me());
 		  if (s.alive) { 
 
 			Pos p = s.pos;
@@ -179,14 +191,51 @@ struct PLAYER_NAME : public Player {
 			
 			Pos danger = nearest_missile(p);
 			bool too_close = (p - danger == DEFAULT);
+			
+			if (too_close) {
+				if (not(active_objective[s_indx])) {
+					if (suitable(UP)) move(sid, UP);
+					else move(sid,DOWN);
+				} else {
+					if (!updown(objective[s_indx].second.top())) {
+						if (suitable(UP)) move(sid, UP);
+						else move(sid,DOWN);
+					} else {
+						move(sid, objective[s_indx].second.top());
+						objective[s_indx].second.pop();
+					}
+				}
+			}
 
 			// Si hay alguien delante, dispara
 			
-			if (s.nb_miss > 0 and (not too_close) and check_shoot(s, p)) {
+			if (s.nb_miss > 0 and check_shoot(s, p)) {
 				// Vale, perfecto pero si teníamos un objetivo nos hemos cargado la cosa.
-				active_objective = false;
+				shoot(sid);
+				active_objective[s_indx] = false;
 				return;
 			}
+			
+			if (active_objective[s_indx] and suitable(objective[s_indx].second.top())) {
+				move(sid, objective[s_indx].second.top());
+				objective[s_indx].second.pop();
+				return;
+			}
+			
+			int limit = get_limit(p);
+			
+			if (s.nb_miss == 0) objective_search(p, MISSILE_BONUS, limit);
+			else objective_search(p, POINT_BONUS);
+			
+			if (not active_objective[s_indx]) {
+				if (limit > 0) move(sid, SLOW);
+				else move(sid, DEFAULT);
+				return;
+			}
+			
+			move(sid, objective[s_indx].second.top());
+			objective[s_indx].second.pop();
+			return;
 			
 		} // End if (s.alive)
 		
