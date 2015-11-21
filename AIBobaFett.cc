@@ -42,7 +42,7 @@ struct PLAYER_NAME : public Player {
      */
      
     vector<bool> active_objective;
-    vector<pair<Pos, stack<Dir>> objective;
+    vector<pair<Pos, stack<Dir>>> objective;
 	
 	bool updown(Dir d)   { return d == SLOW_UP   or d == UP   or d == FAST_UP or d == SLOW_DOWN or d == DOWN or d == FAST_DOWN;   }
 	bool suitable(const Pos& c) { return within_window(c, round()) and (cell(c).type == EMPTY or cell(c).type == MISSILE); }
@@ -79,7 +79,7 @@ struct PLAYER_NAME : public Player {
 	  int get_limit(Pos p) {
 		  int limit = 0;
 		  p -= BACK;
-		  while (within_window(p)) {
+		  while (within_window(p, round())) {
 			  limit++;
 			  p -= BACK;
 		  }
@@ -116,7 +116,6 @@ struct PLAYER_NAME : public Player {
 							// Encontrado
 							m[p+d] = make_pair(p, l);
 							stack_movements(m, p+d, s_indx);
-							objective = p+d;
 							active_objective[s_indx] = true;
 							return true;
 						}
@@ -126,12 +125,12 @@ struct PLAYER_NAME : public Player {
 	   }
 	   
 	   void stack_movements(map<Pos, pair<Pos, int>, pos_comp>& m, Pos p, const int& s_indx) {
-		   pendent_moves[s_indx].second = stack<Dir>();
-		   pendent_moves[s_indx].first = p;
+		   objective[s_indx].second = stack<Dir>();
+		   objective[s_indx].first = p;
 		   map<Pos, pair<Pos, int>, pos_comp>::iterator it;
 		   while(m[p].first != p) {
 			   assert(dir_ok(p - m[p].first));
-			   pendent_moves[s_indx].second.push(p - m[p].first);
+			   objective[s_indx].second.push(p - m[p].first);
 			   p = m[p].first;
 		   }
 	   }
@@ -176,6 +175,7 @@ struct PLAYER_NAME : public Player {
 		if (round() == 0) {
 		  // Inicializar tipos de datos.
 		  active_objective = vector<bool> (number_starships_per_player(), false);
+		  objective = vector<pair<Pos, stack<Dir>>> (number_starships_per_player());
 		}
 
 		// Por cada nave.
@@ -225,7 +225,7 @@ struct PLAYER_NAME : public Player {
 			int limit = get_limit(p);
 			
 			if (s.nb_miss == 0) objective_search(p, MISSILE_BONUS, limit);
-			else objective_search(p, POINT_BONUS);
+			else objective_search(p, POINT_BONUS, limit);
 			
 			if (not active_objective[s_indx]) {
 				if (limit > 0) move(sid, SLOW);
