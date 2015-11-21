@@ -114,14 +114,15 @@ struct PLAYER_NAME : public Player {
 							return false;
 						} else if (cell(p+d).type == obj) {
 							// Encontrado
+							cerr << "Encontrado" << endl;
 							m[p+d] = make_pair(p, l);
 							stack_movements(m, p+d, s_indx);
 							active_objective[s_indx] = true;
 							return true;
 						}
 					}
-					return false;
 				}
+			return false;
 	   }
 	   
 	   void stack_movements(map<Pos, pair<Pos, int>, pos_comp>& m, Pos p, const int& s_indx) {
@@ -147,17 +148,17 @@ struct PLAYER_NAME : public Player {
 			   Pos x = q.front(); q.pop();
 			   int xlimit = positions[x].second;
 			   assert (xlimit <= limit);
-			   if (enqueue(positions, p, DEFAULT, q, xlimit, obj, s_indx)) return;
-			   if (enqueue(positions, p, FAST, q, xlimit, obj, s_indx)) return;
+			   if (enqueue(positions, x, DEFAULT, q, xlimit, obj, s_indx)) return;
+			   if (enqueue(positions, x, FAST, q, xlimit, obj, s_indx)) return;
 			   // Parte complicada, definir con que está conectado cada celda.
 			   if (xlimit < limit) {
-				   if(enqueue(positions, p, SLOW_UP, q, xlimit+1, obj, s_indx)) return;
-				   if(enqueue(positions, p, SLOW_DOWN, q, xlimit+1, obj, s_indx)) return;
+				   if(enqueue(positions, x, SLOW_UP, q, xlimit+1, obj, s_indx)) return;
+				   if(enqueue(positions, x, SLOW_DOWN, q, xlimit+1, obj, s_indx)) return;
 				}
-				if (suitable(p+SLOW_UP) and enqueue(positions, p, UP, q, xlimit, obj, s_indx)) return;
-				if (suitable(p+SLOW_DOWN) and enqueue(positions, p, DOWN, q, xlimit, obj, s_indx)) return;
-				if (suitable(p+DEFAULT) and suitable(p+UP) and enqueue(positions, p, FAST_UP, q, xlimit-1, obj, s_indx)) return;
-				if (suitable(p+DEFAULT) and suitable(p+DOWN) and enqueue(positions, p, FAST_DOWN, q, xlimit-1, obj, s_indx)) return;
+				if (suitable(x+SLOW_UP) and enqueue(positions, x, UP, q, xlimit, obj, s_indx)) return;
+				if (suitable(x+SLOW_DOWN) and enqueue(positions, x, DOWN, q, xlimit, obj, s_indx)) return;
+				if (suitable(x+DEFAULT) and suitable(p+UP) and enqueue(positions, x, FAST_UP, q, xlimit-1, obj, s_indx)) return;
+				if (suitable(x+DEFAULT) and suitable(p+DOWN) and enqueue(positions, x, FAST_DOWN, q, xlimit-1, obj, s_indx)) return;
 		   }
 	   }
 
@@ -190,14 +191,14 @@ struct PLAYER_NAME : public Player {
 			// Me la voy a pegar? Esto me debería decir si me va a dar un misil.
 			
 			Pos danger = nearest_missile(p);
-			bool too_close = (p - danger == DEFAULT);
+			bool too_close = ((p - danger) == DEFAULT);
 			
 			if (too_close) {
 				if (not(active_objective[s_indx])) {
 					if (suitable(UP)) move(sid, UP);
 					else move(sid,DOWN);
 				} else {
-					if (!updown(objective[s_indx].second.top())) {
+					if ((not objective[s_indx].second.empty()) and not updown(objective[s_indx].second.top())) {
 						if (suitable(UP)) move(sid, UP);
 						else move(sid,DOWN);
 					} else {
@@ -216,7 +217,7 @@ struct PLAYER_NAME : public Player {
 				return;
 			}
 			
-			if (active_objective[s_indx] and suitable(objective[s_indx].second.top())) {
+			if (active_objective[s_indx] and (not objective[s_indx].second.empty()) and suitable(objective[s_indx].second.top())) {
 				move(sid, objective[s_indx].second.top());
 				objective[s_indx].second.pop();
 				return;
@@ -230,6 +231,7 @@ struct PLAYER_NAME : public Player {
 			if (not active_objective[s_indx]) {
 				if (limit > 0) move(sid, SLOW);
 				else move(sid, DEFAULT);
+				cerr << "No fucking objectives found" << endl;
 				return;
 			}
 			
