@@ -4,7 +4,6 @@
 #include <utility>
 #include <queue>
 #include <vector>
-#include <cassert>
 
 using namespace std;
 
@@ -28,6 +27,12 @@ struct PLAYER_NAME : public Player {
     
     const Dir BACK = {0, -1};
     
+    struct nodo {
+		Pos pos;
+		int turno;
+		int misiles;
+	};
+    
     struct pos_comp {
 		bool operator() (const Pos& p1, const Pos& p2) {
 			if (p1.real() < p2.real()) return true;
@@ -45,7 +50,15 @@ struct PLAYER_NAME : public Player {
     vector<pair<Pos, stack<Dir>>> objective;
 	
 	bool updown(Dir d)   { return d == SLOW_UP   or d == UP   or d == FAST_UP or d == SLOW_DOWN or d == DOWN or d == FAST_DOWN;   }
-	bool suitable(const Pos& c) { return within_window(c, round()) and (cell(c).type == EMPTY or cell(c).type == MISSILE); }
+	bool suitable(const Pos& c) { return within_window(c, round()) and (cell(c).type == EMPTY or cell(c).type == MISSILE or cell(c).type == MISSILE_BONUS or cell(c).type == POINT_BONUS); }
+	
+	nodo make_nodo(const Pos& pos, const int& turno, const int& misiles) {
+		nodo ret;
+		ret.pos = pos;
+		ret.turno = turno;
+		ret.misiles = misiles;
+		return ret;
+	}
 	
 	// Comprobar si hay alguien delante para matar
 		  
@@ -56,7 +69,7 @@ struct PLAYER_NAME : public Player {
 					shoot(s.sid);
 					return true;
 				}
-			} else if ((ahead = cell(p+FAST)).type == STARSHIP and player_of(ahead.sid) != me()) {
+			} else if (cell(p+FAST).type == STARSHIP and player_of(cell(p+FAST).sid) != me()) {
 				shoot(s.sid);
 				return true;
 			}
@@ -65,15 +78,12 @@ struct PLAYER_NAME : public Player {
 	  
 	  // Quiero saber donde está el peligro más cercano (en la ventana). Si no hay, devuelvo p.
 	  
-	  Pos nearest_missile (const Pos& p) {
-		  Pos iter = p+BACK;
-		  while(within_window(iter, round())) {
-			  Cell icell = cell(iter);
-			  if (icell.type == ASTEROID) return p;
-			  else if (icell.type == MISSILE or (icell.type == STARSHIP and player_of(icell.sid) != me())) return iter;
-			  iter += BACK;
-		}
-		return p;
+	  bool danger (const Pos& p) {
+		  for(int i = 2; i <= 4; ++i) {
+			  Pos check = {p.real(), p.imag() - i};
+			  if (cell(check).type == MISSILE) return true;
+		  }
+		  return false;
 	  }
 	  
 	  int get_limit(Pos p) {
@@ -84,6 +94,25 @@ struct PLAYER_NAME : public Player {
 			  p -= BACK;
 		  }
 		  return limit;
+	  }
+	  
+	  bool check_colision(const Pos& p, const Dir& d) {
+		if (d == DEFAULT or d == SLOW_UP or d == SLOW_DOWN) return suitable(p+d);
+		if (d == UP) return suitable(p+SLOW_UP) and suitable(p+DEFAULT) and suitable(p+UP);
+		if (d == DOWN) return suitable(p+SLOW_DOWN) and suitable(p+DEFAULT) and suitable(p+DOWN);
+		if (d == FAST_UP) return check_colision(p, UP) and suitable(p+FAST) and suitable(p+FAST_UP);
+		if (d == FAST_DOWN) return check_colision(p, DOWN) and suitable(p+FAST) and suitable(p+FAST_DOWN);
+		if (d == FAST) return suitable(p+DEFAULT) and suitable(p+FAST);
+		return false;
+	  }
+	  
+	  void print_pos(const Pos& p) {
+		  cerr << "{" << p.real() << "," << p.imag() << "}" << endl;
+	  }
+	  
+	  bool free_obj(const Pos& p, const int& s_indx) {
+		  for(int i = 0; i < number_starships_per_player(); ++i) if(i != s_indx and objective[i].first == p) return false;
+		  return true;
 	  }
 	  
 	  
@@ -102,64 +131,92 @@ struct PLAYER_NAME : public Player {
 	   * La implementación interna va a usar maps o unordered_maps (ya veremos). 
 	   */
 	   
-	   bool enqueue(map <Pos, pair<Pos, int>, pos_comp>& m, const Pos& p, const Dir& d, queue<Pos>& q, const int& l, const CType& obj, const int& s_indx) {
-		   assert(dir_ok(d)); // DEBUG
-		   map<Pos, pair<Pos, int>, pos_comp>::iterator it;
-		   if(within_window(p+d, round())) {
+	   bool enqueue(map <Pos, nodo, pos_comp>& m, const Pos& p, const Dir& d, queue<Pos>& q, const nodo& n, const CType& obj, const int& s_indx) {
+		   map<Pos, nodo, pos_comp>::iterator it;
+		   if(within_window(p+d, n.turno+1)) {
 				   it = m.find(p+d);
 				   if (it == m.end()) { // Posición no visitada con aterioridad.
-						if (cell(p+d).type == EMPTY or cell(p+d).type == MISSILE)  {
-							m[p+d] = make_pair(p, l);
-							q.push(p+d);
-							return false;
-						} else if (cell(p+d).type == obj) {
+					   if (cell(p+d).type == obj and free_obj(p+d, s_indx)) {
 							// Encontrado
-							cerr << "Encontrado" << endl;
-							m[p+d] = make_pair(p, l);
+							// cerr << "Encontrado" << endl;
+							m[p+d] = make_nodo(p, n.turno+1, n.misiles);
 							stack_movements(m, p+d, s_indx);
 							active_objective[s_indx] = true;
 							return true;
+						} else if (cell(p+d).type != ASTEROID)  {
+							m[p+d] = make_nodo(p, n.turno+1, n.misiles);
+							q.push(p+d);
+							return false;
+						
+						} else if (d == DEFAULT and n.misiles > 0) {
+							m[p+d] = make_nodo(p, n.turno+1, n.misiles-1);
+							q.push(p+d);
+							return false;
 						}
 					}
 				}
 			return false;
 	   }
 	   
-	   void stack_movements(map<Pos, pair<Pos, int>, pos_comp>& m, Pos p, const int& s_indx) {
+	   void stack_movements(map<Pos, nodo, pos_comp>& m, Pos p, const int& s_indx) {
 		   objective[s_indx].second = stack<Dir>();
 		   objective[s_indx].first = p;
 		   map<Pos, pair<Pos, int>, pos_comp>::iterator it;
-		   while(m[p].first != p) {
-			   assert(dir_ok(p - m[p].first));
-			   objective[s_indx].second.push(p - m[p].first);
-			   p = m[p].first;
+		   while(m[p].pos != p) {
+			   objective[s_indx].second.push(p - m[p].pos);
+			   p = m[p].pos;
 		   }
 	   }
 	   
-	   void objective_search(const Pos& p, const CType& obj, const int& limit) {
+	   void objective_search(const Pos& p, const CType& obj) {
 		   int s_indx = cell(p).sid - begin(me());
+		   int misiles_inicial = starship(cell(p).sid).nb_miss;
 		   active_objective[s_indx] = false;
 		   // Definimos estructuras auxiliares.
-		   map<Pos, pair<Pos, int>, pos_comp> positions;
+		   map<Pos, nodo, pos_comp> positions;
 		   queue<Pos> q;
-		   positions[p] = make_pair(p, 0);
+		   positions[p] = make_nodo(p, round(), misiles_inicial);
 		   q.push(p);
+		   bool ok = true;
 		   while (not q.empty()) {
 			   Pos x = q.front(); q.pop();
-			   int xlimit = positions[x].second;
-			   assert (xlimit <= limit);
-			   if (enqueue(positions, x, DEFAULT, q, xlimit, obj, s_indx)) return;
-			   if (enqueue(positions, x, FAST, q, xlimit, obj, s_indx)) return;
-			   // Parte complicada, definir con que está conectado cada celda.
-			   if (xlimit < limit) {
-				   if(enqueue(positions, x, SLOW_UP, q, xlimit+1, obj, s_indx)) return;
-				   if(enqueue(positions, x, SLOW_DOWN, q, xlimit+1, obj, s_indx)) return;
+			   nodo ant = positions[x];
+			   if (within_window(x, round())) {
+				   if (enqueue(positions, x, DEFAULT, q, ant, obj, s_indx)) return;
+				   if(suitable(x+DEFAULT) and enqueue(positions, x, FAST, q, ant, obj, s_indx)) return;
+				   // Parte complicada, definir con que está conectado cada celda.
+					if(enqueue(positions, x, SLOW_UP, q, ant, obj, s_indx)) return;
+					if(enqueue(positions, x, SLOW_DOWN, q, ant, obj, s_indx)) return;
+					if (suitable (x+SLOW_UP) and suitable(x+DEFAULT)) {
+						if(enqueue(positions, x, UP, q, ant, obj, s_indx)) return;
+						if(suitable(x+UP) and suitable(x+FAST) and enqueue(positions, x, FAST_UP, q, ant, obj, s_indx)) return;
+					}
+					if (suitable (x+DEFAULT) and suitable(x+SLOW_DOWN)) {
+						if (enqueue(positions, x, DOWN, q, ant, obj, s_indx)) return;
+						if (suitable(x+DOWN) and suitable(x+FAST) and enqueue(positions, x, FAST_DOWN, q, ant, obj, s_indx)) return;
+					}
 				}
-				if (suitable(x+SLOW_UP) and enqueue(positions, x, UP, q, xlimit, obj, s_indx)) return;
-				if (suitable(x+SLOW_DOWN) and enqueue(positions, x, DOWN, q, xlimit, obj, s_indx)) return;
-				if (suitable(x+DEFAULT) and suitable(p+UP) and enqueue(positions, x, FAST_UP, q, xlimit-1, obj, s_indx)) return;
-				if (suitable(x+DEFAULT) and suitable(p+DOWN) and enqueue(positions, x, FAST_DOWN, q, xlimit-1, obj, s_indx)) return;
 		   }
+	   }
+	   
+	   Dir get_safe_move(const Pos& p) {
+		   if (suitable(p+SLOW_UP)) {
+			   if (not danger(p+SLOW_UP)) return SLOW_UP;
+			   if (suitable(p+UP) and suitable(p+DEFAULT)) {
+				   if (not danger(p+UP)) return UP;
+				   if (suitable(p+FAST) and suitable(p+FAST_UP) and not danger(p+FAST_UP)) return FAST_UP;
+			   }
+		   }
+		   if (suitable(p+SLOW_DOWN)) {
+			   if (not danger(p+SLOW_DOWN)) return SLOW_DOWN;
+			   if (suitable(p+DOWN) and suitable(p+DEFAULT)) {
+				   if (not danger(p+DOWN)) return DOWN;
+				   if (suitable(p+FAST) and suitable(p+FAST_DOWN) and not danger(p+FAST_DOWN)) return FAST_DOWN;
+			   }
+		   }
+		   if (suitable(p+DEFAULT) and suitable(p+FAST) and not danger(p+FAST)) return FAST;
+		   return DEFAULT;
+			   
 	   }
 
 
@@ -181,65 +238,73 @@ struct PLAYER_NAME : public Player {
 
 		// Por cada nave.
 		for (Starship_Id sid = begin(me()); sid != end(me()); ++sid) {
-
 		  Starship s = starship(sid);
 		  int s_indx = sid - begin(me());
-		  if (s.alive) { 
-
-			Pos p = s.pos;
+		  bool jugado = false;
+		  if (s.alive) {
+			Pos p = s.pos;		  
+			if (s.nb_miss > 0 and (not danger(p)) and check_shoot(s, p)) {
+				// Vale, perfecto pero si teníamos un objetivo nos hemos cargado la cosa.
+				active_objective[s_indx] = false;
+				jugado = true;
+			}
 			
-			// Me la voy a pegar? Esto me debería decir si me va a dar un misil.
+			if((not(active_objective[s_indx]) or objective[s_indx].second.empty()) and not jugado) {
+				// cerr << "Voy a buscar" << endl;
+				if (s.nb_miss == 0) objective_search(p, MISSILE_BONUS);
+				else {
+					objective_search(p, POINT_BONUS);
+					if (not active_objective[s_indx]) objective_search(p, MISSILE_BONUS);
+				}
+				// cerr << "Busqueda hecha, resultado "<< active_objective[s_indx] << endl;
+			}
 			
-			Pos danger = nearest_missile(p);
-			bool too_close = ((p - danger) == DEFAULT);
-			
-			if (too_close) {
-				if (not(active_objective[s_indx])) {
-					if (suitable(UP)) move(sid, UP);
-					else move(sid,DOWN);
-				} else {
-					if ((not objective[s_indx].second.empty()) and not updown(objective[s_indx].second.top())) {
-						if (suitable(UP)) move(sid, UP);
-						else move(sid,DOWN);
-					} else {
+			if (active_objective[s_indx] and not jugado) {
+				if (cell(objective[s_indx].first).type != EMPTY and not danger(p+objective[s_indx].second.top())) {
+					if (check_colision(p, objective[s_indx].second.top())) {
 						move(sid, objective[s_indx].second.top());
 						objective[s_indx].second.pop();
+						// cerr << "Muevo nave sin colision" << endl;
+						jugado = true;
+					} else if (objective[s_indx].second.top() == DEFAULT and s.nb_miss > 0) {
+						shoot(sid);
+						objective[s_indx].second.pop();
+						// cerr << "Muevo nave disparando" << endl;
+						jugado = true;
+					}
+				}
+				if (not jugado) {
+					// cerr << "Objetivo ya no válido, busco alternativa" << endl;
+					if (s.nb_miss == 0) objective_search(p, MISSILE_BONUS);
+					else {
+						objective_search(p, POINT_BONUS);
+						if (not active_objective[s_indx]) objective_search(p, MISSILE_BONUS);
+					}
+					if (active_objective[s_indx] and not danger(p+objective[s_indx].second.top())) {
+						if(objective[s_indx].second.top() == DEFAULT and not suitable(p+DEFAULT)) {
+							// cerr << "Disparo en segunda busqueda" << endl;
+							shoot(sid);
+							jugado = true;
+						} else {
+							print_pos(objective[s_indx].second.top());
+							// // cerr << cell(p+objective[s_indx].second.top()).type << endl;
+							move(sid, objective[s_indx].second.top());
+							objective[s_indx].second.pop();
+							// cerr << "Muevo en segunda busqueda" << endl;
+							jugado = true;
+						}
 					}
 				}
 			}
-
-			// Si hay alguien delante, dispara
-			
-			if (s.nb_miss > 0 and check_shoot(s, p)) {
-				// Vale, perfecto pero si teníamos un objetivo nos hemos cargado la cosa.
-				shoot(sid);
-				active_objective[s_indx] = false;
-				return;
+			if (not jugado) {
+				// cerr << "Sin objetivos" << endl;
+				if (within_window(p, round()+1) and not danger(p)) move(sid, SLOW);
+				else move(sid, get_safe_move(p));
 			}
 			
-			if (active_objective[s_indx] and (not objective[s_indx].second.empty()) and suitable(objective[s_indx].second.top())) {
-				move(sid, objective[s_indx].second.top());
-				objective[s_indx].second.pop();
-				return;
-			}
-			
-			int limit = get_limit(p);
-			
-			if (s.nb_miss == 0) objective_search(p, MISSILE_BONUS, limit);
-			else objective_search(p, POINT_BONUS, limit);
-			
-			if (not active_objective[s_indx]) {
-				if (limit > 0) move(sid, SLOW);
-				else move(sid, DEFAULT);
-				cerr << "No fucking objectives found" << endl;
-				return;
-			}
-			
-			move(sid, objective[s_indx].second.top());
-			objective[s_indx].second.pop();
-			return;
-			
-		} // End if (s.alive)
+		} else {
+			active_objective[s_indx] = false;
+			} // End if (s.alive)
 		
 	  } // End for(starship)
   } // End virtual void play()
