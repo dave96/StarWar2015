@@ -7,7 +7,7 @@
 DUMMY_OBJ = AIDummy.o
 
 # Add here any extra .o player files you want to link to the executable
-EXTRA_OBJS =
+EXTRA_OBJS = AIUnDummyFed.o
 
 # Config
 OPTIMIZE = 2 # Optimization level (0 to 3)
@@ -46,7 +46,7 @@ all: Game
 clean:
 	rm -rf Game SecGame *.o *.exe Makefile.deps
 	rm -rf latex refman.pdf
-	cp ./Dummy/AIDummy.o ./
+	cp ./Dummy/* ./
 
 Game: Utils.o Board.o Action.o Player.o Registry.o Game.o Main.o $(PLAYERS_OBJ)
 	$(CXX) $(LDFLAGS) $^ -o $@
