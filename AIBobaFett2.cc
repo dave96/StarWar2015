@@ -12,7 +12,7 @@ using namespace std;
  * Write the name of your player and save this file
  * as AI<name>.cc
  */
-#define PLAYER_NAME BobaFett
+#define PLAYER_NAME BobaFett2
 
 struct PLAYER_NAME : public Player {
 

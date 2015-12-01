@@ -1,4 +1,3 @@
-
 # To be able to play with the Dummy:
 #
 # 1) Copy ../Obj/AIDummy-Linux64bits.o (in 64 bit architectures) to AIDummy.o
@@ -11,7 +10,7 @@ DUMMY_OBJ = AIDummy.o
 EXTRA_OBJS =
 
 # Config
-OPTIMIZE = 3 # Optimization level (0 to 3)
+OPTIMIZE = 2 # Optimization level (0 to 3)
 DEBUG	 = 0 # Compile for debugging (0 or 1)
 PROFILE	 = 0 # Compile for profile (0 or 1)
 32BITS	 = 0 # Produce 32 bits objects on 64 bits systems (0 or 1)
@@ -37,7 +36,7 @@ ifeq ($(strip $(32BITS)),1)
 	ARCHFLAGS=-m32 -L/usr/lib32
 endif
 
-CXXFLAGS = -DNDEBUG -std=c++0x -Wall -Wno-unused-variable $(ARCHFLAGS) $(PROFILEFLAGS) $(DEBUGFLAGS) -O$(strip $(OPTIMIZE)) -Wextra
+CXXFLAGS = -DNDEBUG -std=c++0x -Wall -Wno-unused-variable $(ARCHFLAGS) $(PROFILEFLAGS) $(DEBUGFLAGS) -O$(strip $(OPTIMIZE)) #-Wextra
 LDFLAGS	 = -std=c++0x -lm $(ARCHFLAGS) $(PROFILEFLAGS) $(DEBUGFLAGS) -O$(strip $(OPTIMIZE))
 
 # Rules

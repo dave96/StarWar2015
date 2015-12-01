@@ -323,7 +323,7 @@ void Board::print_state(ostream& os) const {
 }
 
 
-Board Board::next (const vector<Action>& asked, vector<Action>& done) const {
+Board Board::next (const vector<Action>& asked, vector<Action>& done) {
 
   assert(ok());
 
@@ -357,16 +357,22 @@ Board Board::next (const vector<Action>& asked, vector<Action>& done) const {
   vector<bool> commanded(number_starships(), false);
   for (int k = 0; k < number_players(); ++k) {
     Player_Id p = random_players[k];
-    for (const Instruction& ins : asked[p].instructs)
-      if (b.ships[ins.sid].alive) {
-        my_assert(player_of(ins.sid) == p);
-        my_assert(ins.type == MOVE or ins.type == SHOOT);
-        if (b.apply(ins)) {
-          commanded[ins.sid] = true;
-          done[p].sids.insert(ins.sid);
-          done[p].instructs.push_back(ins);
-        }
+    for (const Instruction& ins : asked[p].instructs) {
+      if (not(
+	      starship_ok(ins.sid)                    and
+	      player_of(ins.sid) == p                 and
+	      (ins.type == MOVE or ins.type == SHOOT) and
+	      not commanded[ins.sid] and
+	      dir_ok(ins.dir)
+	      ))
+	continue;
+
+      if (b.ships[ins.sid].alive and b.apply(ins)) {
+	commanded[ins.sid] = true;
+	done[p].sids.insert(ins.sid);
+	done[p].instructs.push_back(ins);
       }
+    }
     for (Starship_Id s = begin(p); s != end(p); ++s)
       if (not commanded[s] and b.ships[s].alive)
         b.apply({s, MOVE, DEFAULT});
@@ -424,14 +430,26 @@ bool Board::move_starship(Starship& s, Dir dir) {
       c.type = EMPTY;
     }
     else if (c.type == ASTEROID) {
+
+      cellPriv(s.pos + d) = {STARSHIP, s.sid, -1};
+      cellPriv(s.pos    ) = {EMPTY,       -1, -1};
+      s.pos += d;
+      s.pos.imag(normalize(s.pos.imag()));
       kill_starship(s);
+
       c.type = EMPTY;
       return true;
     }
     else if (c.type == STARSHIP) {
       Starship& t = ships[c.sid];
       my_assert(s.sid != t.sid);
+
+      cellPriv(s.pos + d) = {STARSHIP, s.sid, -1};
+      cellPriv(s.pos    ) = {EMPTY,       -1, -1};
+      s.pos += d;
+      s.pos.imag(normalize(s.pos.imag()));
       kill_starship(s);
+
       kill_starship(t);
       return true;
     }
@@ -440,7 +458,13 @@ bool Board::move_starship(Starship& s, Dir dir) {
       Missile m = miss[c.mid];
       if (player_of(m.sid) != player_of(s.sid))
         scores[player_of(m.sid)] += kill_points();
+
+      cellPriv(s.pos + d) = {STARSHIP, s.sid, -1};
+      cellPriv(s.pos    ) = {EMPTY,       -1, -1};
+      s.pos += d;
+      s.pos.imag(normalize(s.pos.imag()));
       kill_starship(s);
+
       kill_missile(m);
       return true;
     }
@@ -449,7 +473,8 @@ bool Board::move_starship(Starship& s, Dir dir) {
   cellPriv(s.pos      ) = {EMPTY,       -1, -1};
 
   s.pos += dir;
-
+  s.pos.imag(normalize(s.pos.imag()));
+  
   return true;
 }
 
@@ -502,7 +527,8 @@ bool Board::move_missile(Missile& m) {
   cellPriv(m.pos)        = {EMPTY,   -1, -1   };
 
   m.pos += FAST;
-
+  m.pos.imag(normalize(m.pos.imag()));
+  
   return true;
 }
 
@@ -539,7 +565,7 @@ bool Board::regenerate_starship(Starship& s) {
 
 
 bool Board::random_empty_position(Pos up_left, Pos down_right, int n, const set<CType>& s, Pos& p) {
-  constexpr int MAX_ATTEMPS = 20;
+  const int MAX_ATTEMPS = 20;
   for (int k = 0; k < MAX_ATTEMPS; ++k) {
     int i = randomize( first(up_left),  first(down_right));
     int j = randomize(second(up_left), second(down_right));

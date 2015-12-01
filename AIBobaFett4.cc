@@ -12,7 +12,7 @@ using namespace std;
  * Write the name of your player and save this file
  * as AI<name>.cc
  */
-#define PLAYER_NAME BobaFett
+#define PLAYER_NAME BobaFett4
 
 struct PLAYER_NAME : public Player {
 
@@ -82,6 +82,7 @@ struct PLAYER_NAME : public Player {
 	  bool danger (const Pos& p) {
 		  for(int i = 2; i <= 4; ++i) {
 			  Pos check = {p.real(), p.imag() - i};
+			  if (cell(check).type == ASTEROID or cell(check).type == POINT_BONUS or cell(check).type == MISSILE_BONUS) return false;
 			  if (cell(check).type == MISSILE) return true;
 		  }
 		  return false;
